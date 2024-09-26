@@ -346,6 +346,8 @@ fcomplex *gen_w_response(double roffset, int numbetween, double z,
   /*       contain.                                                    */
   /*  This version uses zero-padding to get the "numbetween"           */
 {
+    //printf("Piyush's tests: gen_w_response called with z = %.3f and w = %.3f \r", z, w);
+    //fflush(stdout);
     int ii, fbar, num_pts_wdat;
     float *data;
     double amp, f, fd, fdd, dt, t, phase, dfbar;
@@ -401,6 +403,7 @@ fcomplex *gen_w_response(double roffset, int numbetween, double z,
         phase = TWOPI * (t * (t * (t * fdd + fd) + f));
         data[ii] = amp * cos(phase);
     }
+    printf("GENRESPONSE BAKCHODI: data generated with vector of size: %ld, second half zeros, output size = %ld\n", num_pts_wdat * numbetween, numkern);
 
     /* FFT the data */
     realfft(data, num_pts_wdat * numbetween, -1);

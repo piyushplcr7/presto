@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #endif
 
+#include "time.h"
+
 // Use OpenMP
 #ifdef _OPENMP
 #include <omp.h>
@@ -75,9 +77,18 @@ int main(int argc, char *argv[])
     printf("\n\n");
     printf("    Fourier-Domain Acceleration and Jerk Search Routine\n");
     printf("                    by Scott M. Ransom\n\n");
+    printf(" Timings by Piyush \n");
 
+    clock_t start, end;
+    double cpu_time_used;
+
+    start = clock();
     /* Create the accelobs structure */
     create_accelobs(&obs, &idata, cmd, 1);
+    end = clock();
+
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA: create_accelobs: %f seconds\n", cpu_time_used);
 
     /* The step-size of blocks to walk through the input data */
     rstep = obs.corr_uselen * ACCEL_DR;
@@ -118,7 +129,13 @@ int main(int argc, char *argv[])
     /* Generate the correlation kernels */
 
     printf("\nGenerating correlation kernels:\n");
+    start = clock();
     subharminfs = create_subharminfos(&obs);
+    end = clock();
+
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA: create_subharminfos time: %f seconds\n", cpu_time_used);
+
     printf("Done generating kernels.\n\n");
     if (cmd->ncpus > 1) {
 #ifdef _OPENMP
@@ -156,6 +173,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    start = clock();
     /* Start the main search loop */
     {
         double startr, lastr, nextr;
@@ -190,9 +208,17 @@ int main(int argc, char *argv[])
                                    obs.highestbin - obs.rlo, "search", 0);
             nextr = startr + rstep;
             lastr = nextr - ACCEL_DR;
+
+            clock_t start_fund, end_fund;
+
+            start_fund = clock();
             fundamental = subharm_fderivs_vol(1, 1, startr, lastr,
                                               &subharminfs[0][0], &obs);
             cands = search_ffdotpows(fundamental, 1, &obs, cands);
+            end_fund = clock();
+            end = clock();
+            cpu_time_used = ((double) (end_fund - start_fund)) / CLOCKS_PER_SEC;
+            printf("#KALANINJA: fundamental subharm_fderivs_vol + search_ffdotpows time: %f seconds\n", cpu_time_used);
 
             if (obs.numharmstages > 1) {        /* Search the subharmonics */
                 int stage, harmtosum, harm;
@@ -207,11 +233,18 @@ int main(int argc, char *argv[])
                         if (obs.inmem) {
                             inmem_add_subharm(fundamental, &obs, harmtosum, harm);
                         } else {
+                            clock_t start_subh, end_subh;
+
+                            start_subh = clock();
                             subharmonic =
                                 subharm_fderivs_vol(harmtosum, harm, startr, lastr,
                                                     &subharminfs[stage][harm - 1],
                                                     &obs);
                             add_subharm(fundamental, subharmonic, harmtosum, harm);
+                            end_subh = clock();
+                            
+                            cpu_time_used = ((double) (end_subh - start_subh)) / CLOCKS_PER_SEC;
+                            printf("#KALANINJA: subharmonic subharm_fderivs_vol time: %f seconds\n", cpu_time_used);
                             free_ffdotpows(subharmonic);
                         }
                     }
@@ -224,6 +257,10 @@ int main(int argc, char *argv[])
         print_percent_complete(obs.highestbin - obs.rlo,
                                obs.highestbin - obs.rlo, "search", 0);
     }
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA: search loop time: %f seconds\n", cpu_time_used);
 
     printf("\n\nDone searching.  Now optimizing each candidate.\n\n");
     free_subharminfos(&obs, subharminfs);
@@ -240,8 +277,14 @@ int main(int argc, char *argv[])
             cands = sort_accelcands(cands);
 
             /* Eliminate (most of) the harmonically related candidates */
-            if ((cmd->numharm > 1) && !(cmd->noharmremoveP))
+            if ((cmd->numharm > 1) && !(cmd->noharmremoveP)) {
+                start = clock();
                 eliminate_harmonics(cands, &numcands);
+                end = clock();
+
+                cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+                printf("eliminate_harmonics time: %f seconds\n", cpu_time_used);
+            }
 
             /* Now optimize each candidate and its harmonics */
             print_percent_complete(0, 0, NULL, 1);

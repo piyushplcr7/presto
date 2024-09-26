@@ -153,13 +153,14 @@ static void init_kernel(int z, int w, int fftlen, kernel * kern)
 {
     int numkern;
     fcomplex *tempkern;
-
     kern->z = z;
     kern->w = w;
+    printf("Piyush test: init_kernel(z,w) = %d, %d ; kern->z, kern->w = %d, %d \n", z,w, kern->z, kern->w);
     kern->fftlen = fftlen;
     kern->numbetween = ACCEL_NUMBETWEEN;
     kern->kern_half_width = w_resp_halfwidth((double) z, (double) w, LOWACC);
     numkern = 2 * kern->numbetween * kern->kern_half_width;
+    printf("KALA TEST: inside init_kernel, kernel_half_width = %ld, numkern (kernel length out from gen_w_response) = %ld, fftlen = %ld\n",kern->kern_half_width, numkern, fftlen);
     kern->numgoodbins = kern->fftlen - numkern;
     kern->data = gen_cvect(kern->fftlen);
     tempkern = gen_w_response(0.0, kern->numbetween, kern->z, kern->w, numkern);
@@ -209,6 +210,8 @@ static void init_subharminfo(int numharm, int harmnum, int zmax, int wmax, subha
     shi->harmnum = harmnum;
     shi->zmax = calc_required_z(harm_fract, zmax);
     shi->wmax = calc_required_w(harm_fract, wmax);
+    //printf("Piyush's tetst: shi->zmax = %d \n", shi->zmax);
+    //printf("Piyush's tetst: shi->wmax = %d \n", shi->wmax);
     if (numharm > 1) {
         shi->rinds = (unsigned short *) malloc(obs->corr_uselen * sizeof(unsigned short));
         shi->zinds = (unsigned short *) malloc(obs->corr_uselen * sizeof(unsigned short));
@@ -234,15 +237,19 @@ static void init_subharminfo(int numharm, int harmnum, int zmax, int wmax, subha
 
 subharminfo **create_subharminfos(accelobs * obs)
 {
+    printf("Piyush's test: obs->whi = %.3f \n", obs->whi);
+    printf("Piyush's test: obs->zhi = %.3f \n", obs->zhi);
     double kern_ram_use=0;
     int ii, jj, harmtosum, fftlen;
     subharminfo **shis;
     
+    // numharmstages is log2(number of harmonics, e.g. 32)
     shis = (subharminfo **) malloc(obs->numharmstages * sizeof(subharminfo *));
     /* Prep the fundamental (actually, the highest harmonic) */
     shis[0] = (subharminfo *) malloc(2 * sizeof(subharminfo));
     init_subharminfo(1, 1, (int) obs->zhi, (int) obs->whi, &shis[0][0], obs);
     fftlen = obs->fftlen;
+    printf("KALA TEST: fftlen for fundamental = %ld\n",fftlen);
     kern_ram_use += shis[0][0].numkern * fftlen * sizeof(fcomplex); // in Bytes
     if (obs->numw)
         printf("  Harm  1/1 : %5d kernels, %4d < z < %-4d and %5d < w < %-5d (%5d pt FFTs)\n",
@@ -260,6 +267,7 @@ subharminfo **create_subharminfos(accelobs * obs)
                 init_subharminfo(harmtosum, jj, (int) obs->zhi,
                                  (int) obs->whi, &shis[ii][jj - 1], obs);
                 fftlen = calc_fftlen(harmtosum, jj, (int) obs->zhi, (int) obs->whi, obs);
+                printf("KALA TEST: fftlen for subharmonic = %ld\n", fftlen);
                 kern_ram_use += shis[ii][jj - 1].numkern * fftlen * sizeof(fcomplex); // in Bytes
                 if (obs->numw)
                     printf("  Harm %2d/%-2d: %5d kernels, %4d < z < %-4d and %5d < w < %-5d (%5d pt FFTs)\n",
@@ -1524,6 +1532,8 @@ void deredden(fcomplex * fft, int numamps)
 void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemmap)
 {
     int ii, rootlen, input_shorts = 0;
+    clock_t start, end;
+    double cpu_time_used;
 
     {
         int hassuffix = 0;
@@ -1584,6 +1594,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
 
         /* Check the length of the file to see if we can handle it */
         filelen = chkfilelen(datfile, sizeof(float));
+        printf("KALA TEST: file length: %ld\n",filelen);
         if (input_shorts)
             filelen *= 2;
         if (filelen > 67108864) {       /* Small since we need memory for the templates */
@@ -1608,9 +1619,14 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
                 ftmp[ii + ACCEL_PADDING] = (float) stmp[ii];
             vect_free(stmp);
         } else {
+            start = clock();
             ftmp =
                 read_float_file(datfile, -ACCEL_PADDING,
                                 filelen + 2 * ACCEL_PADDING);
+            end = clock();
+
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+            printf("#KALANINJA: Reading input dat file (DD time series) took: %f seconds\n", cpu_time_used);
         }
         /* Now, offset the pointer so that we are pointing at the first */
         /* bits of valid data.                                          */
@@ -1618,7 +1634,13 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
         fclose(datfile);
 
         /* FFT it */
+        start = clock();
         realfft(ftmp, filelen, -1);
+        end = clock();
+
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+        printf("#KALANINJA: FFTing the input time serires took: %f seconds\n", cpu_time_used);
+
         obs->fftfile = NULL;
         obs->fft = (fcomplex *) ftmp;
         obs->numbins = filelen / 2;
@@ -1626,8 +1648,14 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
 
         /* De-redden it */
         printf("Removing red-noise...");
+        start = clock();
         deredden(obs->fft, obs->numbins);
         printf("done.\n\n");
+        end = clock();
+
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+        printf("#KALANINJA: deredden function took: %f seconds\n", cpu_time_used);
+        
     }
 
     /* Open the FFT file if it exists appropriately */
@@ -1659,7 +1687,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
     }
 
     /* Determine the other parameters */
-
+    printf("Piyush's test: cmd->zmax = %d \n", cmd->zmax);
     if (cmd->zmax % ACCEL_DZ)
         cmd->zmax = (cmd->zmax / ACCEL_DZ + 1) * ACCEL_DZ;
     obs->N = (long long) idata->N;
@@ -1716,6 +1744,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
     
     /* Setting extra parameters for jerk search */
     if (cmd->wmaxP) {
+        printf("Piyush's test: cmd->wmax = %d \n", cmd->wmax);
         if (cmd->wmax % ACCEL_DW)
             cmd->wmax = (cmd->wmax / ACCEL_DW + 1) * ACCEL_DW;
         obs->whi = cmd->wmax;
@@ -1798,6 +1827,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
     }
     obs->dr = ACCEL_DR;
     obs->zhi = cmd->zmax;
+    printf("Piyush's test: obs->zhi = %.3f, cmd->zmax = %d \n", obs->zhi, cmd->zmax);
     obs->zlo = -cmd->zmax;
     obs->sigma = cmd->sigma;
     obs->powcut = (float *) malloc(obs->numharmstages * sizeof(float));
@@ -1829,8 +1859,11 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
      */
 
     /* Determine corr_uselen from zmax and wmax */
+    printf("KALA TEST: w_resp_halfwidth = %ld\n",w_resp_halfwidth(obs->zhi, obs->whi, LOWACC));
     obs->maxkernlen = 2 * ACCEL_NUMBETWEEN * w_resp_halfwidth(obs->zhi, obs->whi, LOWACC);
+    printf("KALA TEST: maxkernlen = %ld\n",obs->maxkernlen);
     obs->fftlen = fftlen_from_kernwidth(obs->maxkernlen);
+    printf("KALA TEST: fftlen = %ld\n",obs->fftlen);
     if (obs->fftlen < 2048)
         obs->fftlen = 2048;  // This gives slightly better speed empirically
     obs->corr_uselen = obs->fftlen - obs->maxkernlen;

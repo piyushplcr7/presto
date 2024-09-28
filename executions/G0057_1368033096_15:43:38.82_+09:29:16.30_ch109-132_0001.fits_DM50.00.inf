@@ -1,0 +1,27 @@
+ Data file name without suffix          =  /work/scitas/mwa_data/1407613096/J1543+0929/G0057_1368033096_15:43:38.82_+09:29:16.30_ch109-132_0001.fits_DM50.00
+ Telescope used                         =  MWA
+ Instrument used                        =  v4.2.23_eb170b2
+ Object being observed                  =  1368033096
+ J2000 Right Ascension (hh:mm:ss.ssss)  =  15:43:38.8200
+ J2000 Declination     (dd:mm:ss.ssss)  =  09:29:16.3000
+ Data observed by                       =  MWA User
+ Epoch of observation (MJD)             =  60077.722061276588647
+ Barycentered?           (1 yes, 0 no)  =  1
+ Number of bins in the time series      =  2000000    
+ Width of each time series bin (sec)    =  0.0001
+ Any breaks in the data? (1 yes, 0 no)  =  1
+ On/Off bin pair #  1                   =  0          , 1919997    
+ On/Off bin pair #  2                   =  1999999    , 1999999    
+ Type of observation (EM band)          =  Radio
+ Beam diameter (arcsec)                 =  900
+ Dispersion measure (cm-3 pc)           =  50
+ Central freq of low channel (MHz)      =  138.880004883
+ Total bandwidth (MHz)                  =  30.7199914523
+ Number of channels                     =  3072
+ Channel bandwidth (MHz)                =  0.00999999721754
+ Data analyzed by                       =  panchal
+ Any additional notes:
+    Project ID G0057, Date: 2023-05-13T17:11:18.
+    4 polns were not summed.  Samples have 8 bits.
+
+

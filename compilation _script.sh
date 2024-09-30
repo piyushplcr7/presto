@@ -2,8 +2,8 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 
 conda activate presto
-export PRESTO="/home/pp/Repositories/presto"
-export TEMPO="/home/pp/Repositories/tempo"
+export PRESTO="/home/panchal/Repositories/presto"
+export TEMPO="/home/panchal/Repositories/tempo"
 
 # clean build
 cd $PRESTO/src
@@ -14,9 +14,9 @@ cd ..
 meson setup build --wipe --prefix=$CONDA_PREFIX
 
 # fixing libraries for check_meson_build.py
-export LIBRARY_PATH=/home/pp/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LIBRARY_PATH
+export LIBRARY_PATH=/home/panchal/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LIBRARY_PATH
 
-export LD_LIBRARY_PATH=/home/pp/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LD_LIBRARY_PATHQ
+export LD_LIBRARY_PATH=/home/panchal/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LD_LIBRARY_PATHQ
 
 
 # check meson build

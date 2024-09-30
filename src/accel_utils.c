@@ -152,21 +152,27 @@ static int calc_fftlen(int numharm, int harmnum, int max_zfull, int max_wfull, a
 static void init_kernel(int z, int w, int fftlen, kernel * kern)
 {
     int numkern;
+    clock_t start, end;
+    double cpu_time_used;
     fcomplex *tempkern;
     kern->z = z;
     kern->w = w;
-    printf("Piyush test: init_kernel(z,w) = %d, %d ; kern->z, kern->w = %d, %d \n", z,w, kern->z, kern->w);
+    //printf("Piyush test: init_kernel(z,w) = %d, %d ; kern->z, kern->w = %d, %d \n", z,w, kern->z, kern->w);
     kern->fftlen = fftlen;
     kern->numbetween = ACCEL_NUMBETWEEN;
     kern->kern_half_width = w_resp_halfwidth((double) z, (double) w, LOWACC);
     numkern = 2 * kern->numbetween * kern->kern_half_width;
-    printf("KALA TEST: inside init_kernel, kernel_half_width = %ld, numkern (kernel length out from gen_w_response) = %ld, fftlen = %ld\n",kern->kern_half_width, numkern, fftlen);
+    //printf("KALA TEST: inside init_kernel, kernel_half_width = %ld, numkern (kernel length out from gen_w_response) = %ld, fftlen = %ld\n",kern->kern_half_width, numkern, fftlen);
     kern->numgoodbins = kern->fftlen - numkern;
     kern->data = gen_cvect(kern->fftlen);
     tempkern = gen_w_response(0.0, kern->numbetween, kern->z, kern->w, numkern);
     place_complex_kernel(tempkern, numkern, kern->data, kern->fftlen);
     vect_free(tempkern);
+    start = clock();
     COMPLEXFFT(kern->data, kern->fftlen, -1);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA:COMPLEXFFT time for fftlen:%d =  %f seconds\n", fftlen, cpu_time_used);
 }
 
 
@@ -204,6 +210,8 @@ static void init_subharminfo(int numharm, int harmnum, int zmax, int wmax, subha
 {
     int ii, jj, fftlen;
     double harm_fract;
+    clock_t start, end;
+    double cpu_time_used;
 
     harm_fract = (double) harmnum / (double) numharm;
     shi->numharm = numharm;
@@ -228,8 +236,12 @@ static void init_subharminfo(int numharm, int harmnum, int zmax, int wmax, subha
     /* Actually append kernels to each array element */
     for (ii = 0; ii < shi->numkern_wdim; ii++) {
         for (jj = 0; jj < shi->numkern_zdim; jj++) {
+            start = clock();
             init_kernel(-shi->zmax + jj * ACCEL_DZ,
                         -shi->wmax + ii * ACCEL_DW, fftlen, &shi->kern[ii][jj]);
+            end = clock();
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+            printf("#KALANINJA:init_kernel for fftlen:%d =  %f seconds\n", fftlen, cpu_time_used);
         }
     }
 }
@@ -1021,6 +1033,8 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
                                subharminfo * shi, accelobs * obs)
 {
     int ii, numdata, fftlen, binoffset;
+    clock_t start,end;
+    double cpu_time_used;
     long long lobin;
     float powargr, powargi;
     double drlo, drhi, harm_fract;
@@ -1072,7 +1086,11 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
     fftlen = shi->kern[0][0].fftlen;
     lobin = ffdot->rlo - binoffset;
     numdata = fftlen / ACCEL_NUMBETWEEN;
+    start = clock();
     data = get_fourier_amplitudes(lobin, numdata, obs);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA:get_fourier_amplitudes %f seconds\n", cpu_time_used);
     //if (!obs->mmap_file && !obs->dat_input && 0)
     //    printf("This is newly malloc'd!\n");
 
@@ -1118,7 +1136,11 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
     pdata = gen_cvect(fftlen);
     spread_no_pad(data, fftlen / ACCEL_NUMBETWEEN, pdata, fftlen, ACCEL_NUMBETWEEN);
     // Note COMPLEXFFT is not thread-safe because of wisdom caching
+    start = clock();
     COMPLEXFFT(pdata, fftlen, -1);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA:SECONDCOMPLEXFFT %f seconds\n", cpu_time_used);
 
     // Create the output power array
     ffdot->powers = gen_f3Darr(ffdot->numws, ffdot->numzs, ffdot->numrs);
@@ -1136,7 +1158,8 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
         vect_free(tmpdat);
         vect_free(tmpout);
     }
-
+    
+    start = clock();
     // Perform the correlations in a thread-safe manner
 #ifdef _OPENMP
 #pragma omp parallel default(none) shared(pdata,shi,fftlen,binoffset,ffdot,invplan)
@@ -1147,14 +1170,14 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
         // tmpdat gets overwritten during the correlation
         fcomplex *tmpdat = gen_cvect(fftlen);
         fcomplex *tmpout = gen_cvect(fftlen);
-        int jj;
+        
 #ifdef _OPENMP
 // #pragma omp for collapse(2)  Do we want this somehow?
-#pragma omp for
 #endif
         /* Check, should we add the collapse to parallelize numws and numzs loops? */
-        for (ii = 0; ii < ffdot->numws; ii++) {
-            for (jj = 0; jj < ffdot->numzs; jj++) {
+        for (int ii = 0; ii < ffdot->numws; ii++) {
+            #pragma omp for
+            for (int jj = 0; jj < ffdot->numzs; jj++) {
                 int kk;
                 float *fkern = (float *) shi->kern[ii][jj].data;
                 float *fpdata = (float *) pdata;
@@ -1192,6 +1215,11 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
         vect_free(tmpdat);
         vect_free(tmpout);
     }
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("#KALANINJA:OpenMP correlation %f seconds\n", cpu_time_used);
+
     // Free data and the spread-data
     vect_free(data);
     vect_free(pdata);
@@ -1626,7 +1654,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
             end = clock();
 
             cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-            printf("#KALANINJA: Reading input dat file (DD time series) took: %f seconds\n", cpu_time_used);
+            printf("#KALANINJA:read_float_file took: %f seconds\n", cpu_time_used);
         }
         /* Now, offset the pointer so that we are pointing at the first */
         /* bits of valid data.                                          */
@@ -1639,7 +1667,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
         end = clock();
 
         cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-        printf("#KALANINJA: FFTing the input time serires took: %f seconds\n", cpu_time_used);
+        printf("#KALANINJA:realfft(input_ts) took: %f seconds\n", cpu_time_used);
 
         obs->fftfile = NULL;
         obs->fft = (fcomplex *) ftmp;
@@ -1654,7 +1682,7 @@ void create_accelobs(accelobs * obs, infodata * idata, Cmdline * cmd, int usemma
         end = clock();
 
         cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-        printf("#KALANINJA: deredden function took: %f seconds\n", cpu_time_used);
+        printf("#KALANINJA:deredden function took: %f seconds\n", cpu_time_used);
         
     }
 

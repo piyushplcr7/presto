@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
     end = clock();
 
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("#KALANINJA: create_accelobs: %f seconds\n", cpu_time_used);
+    printf("#KALANINJA:create_accelobs: %f seconds\n", cpu_time_used);
 
     /* The step-size of blocks to walk through the input data */
     rstep = obs.corr_uselen * ACCEL_DR;
@@ -134,11 +134,12 @@ int main(int argc, char *argv[])
     end = clock();
 
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("#KALANINJA: create_subharminfos time: %f seconds\n", cpu_time_used);
+    printf("#KALANINJA:create_subharminfos time: %f seconds\n", cpu_time_used);
 
     printf("Done generating kernels.\n\n");
     if (cmd->ncpus > 1) {
 #ifdef _OPENMP
+        printf("Using OpenMP and using more than 1 thread\n");
         set_openmp_numthreads(cmd->ncpus);
 #endif
     } else {
@@ -173,6 +174,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    double time_fderivs_vol = 0., time_search_ffdotpows = 0.;
+    if (obs.inmem) {
+        printf("#KALANINJA: obs.inmem = true\n");
+    }
+
     start = clock();
     /* Start the main search loop */
     {
@@ -204,8 +210,8 @@ int main(int argc, char *argv[])
         nextr = 0;
         while (startr + rstep < obs.highestbin) {
             /* Search the fundamental */
-            print_percent_complete(startr - obs.rlo,
-                                   obs.highestbin - obs.rlo, "search", 0);
+            //print_percent_complete(startr - obs.rlo,
+             //                      obs.highestbin - obs.rlo, "search", 0);
             nextr = startr + rstep;
             lastr = nextr - ACCEL_DR;
 
@@ -214,13 +220,22 @@ int main(int argc, char *argv[])
             start_fund = clock();
             fundamental = subharm_fderivs_vol(1, 1, startr, lastr,
                                               &subharminfs[0][0], &obs);
+            end_fund = clock();
+            cpu_time_used = ((double) (end_fund - start_fund)) / CLOCKS_PER_SEC;
+            time_fderivs_vol += cpu_time_used;
+            //printf("#KALANINJA:fundamental subharm_fderivs_vol time: %f seconds\n", cpu_time_used);
+
+            start_fund = clock();
             cands = search_ffdotpows(fundamental, 1, &obs, cands);
             end_fund = clock();
-            end = clock();
             cpu_time_used = ((double) (end_fund - start_fund)) / CLOCKS_PER_SEC;
-            printf("#KALANINJA: fundamental subharm_fderivs_vol + search_ffdotpows time: %f seconds\n", cpu_time_used);
-
-            if (obs.numharmstages > 1) {        /* Search the subharmonics */
+            time_search_ffdotpows += cpu_time_used;
+            //printf("#KALANINJA:fundamental search_ffdotpows time: %f seconds\n", cpu_time_used);
+            
+            //end = clock();
+            
+            // Search the subharmonics 
+            if (obs.numharmstages > 1) {        
                 int stage, harmtosum, harm;
                 ffdotpows *subharmonic;
 
@@ -254,13 +269,15 @@ int main(int argc, char *argv[])
             free_ffdotpows(fundamental);
             startr = nextr;
         }
-        print_percent_complete(obs.highestbin - obs.rlo,
-                               obs.highestbin - obs.rlo, "search", 0);
+        //print_percent_complete(obs.highestbin - obs.rlo,
+         //                      obs.highestbin - obs.rlo, "search", 0);
     }
 
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("#KALANINJA: search loop time: %f seconds\n", cpu_time_used);
+    printf("#KALANINJA: subharm_fderivs_vol total time: %f seconds\n", time_fderivs_vol);
+    printf("#KALANINJA: search_ffdotpows total time: %f seconds\n", time_search_ffdotpows);
 
     printf("\n\nDone searching.  Now optimizing each candidate.\n\n");
     free_subharminfos(&obs, subharminfs);

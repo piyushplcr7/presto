@@ -1,5 +1,5 @@
 #!/bin/bash
-source /opt/intel/oneapi/setvars.sh
+#source /opt/intel/oneapi/setvars.sh
 export NUMHARM=1
 #export NUMCPUS=8
 #export ZMAX=10
@@ -15,6 +15,6 @@ do
         ZMAX=$MAXVAL
         WMAX=$MAXVAL
         OUTNAME="cpu_out_${NUMHARM}_${NUMCPUS}_${WMAX}_${ZMAX}"
-        vtune -collect threading accelsearch -numharm ${NUMHARM} -ncpus ${NUMCPUS} -zmax ${ZMAX} -wmax ${WMAX} ${DATFILE} > outlogs/${OUTNAME}
+        accelsearch -numharm ${NUMHARM} -ncpus ${NUMCPUS} -zmax ${ZMAX} -wmax ${WMAX} ${DATFILE} > outlogs/${OUTNAME}
     done
 done

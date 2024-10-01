@@ -1170,46 +1170,70 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
         // tmpdat gets overwritten during the correlation
         fcomplex *tmpdat = gen_cvect(fftlen);
         fcomplex *tmpout = gen_cvect(fftlen);
+
+        clock_t tstart,tend;
         
 #ifdef _OPENMP
 // #pragma omp for collapse(2)  Do we want this somehow?
+#pragma omp for
 #endif
         /* Check, should we add the collapse to parallelize numws and numzs loops? */
         for (int ii = 0; ii < ffdot->numws; ii++) {
-            #pragma omp for
+            int tid;
+            tid = omp_get_thread_num();
+            double val = 0;
             for (int jj = 0; jj < ffdot->numzs; jj++) {
                 int kk;
-                float *fkern = (float *) shi->kern[ii][jj].data;
+                //float *fkern = (float *) shi->kern[ii][jj].data;
                 float *fpdata = (float *) pdata;
                 float *fdata = (float *) tmpdat;
-                float *outpows = ffdot->powers[ii][jj];
+                //float *outpows = ffdot->powers[ii][jj];
                 // multiply data and kernel 
                 // (using floats for better vectorization)
+                tstart = clock();
 #if (defined(__GNUC__) || defined(__GNUG__)) &&         \
     !(defined(__clang__) || defined(__INTEL_COMPILER))
 #pragma GCC ivdep
 #endif
                 for (kk = 0; kk < fftlen * 2; kk += 2) {
                     const float dr = fpdata[kk], di = fpdata[kk + 1];
-                    const float kr = fkern[kk], ki = fkern[kk + 1];
+                    const float kr = 0.3/*fkern[kk]*/, ki = 0.1/*fkern[kk + 1]*/;
                     fdata[kk] = dr * kr + di * ki;
                     fdata[kk + 1] = di * kr - dr * ki;
                 }
+                tend = clock();
+                double ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
+                printf("#Thread : %d spent %f seconds on complex mult for jj = %d\n", tid, ttime,jj);
+
+                /* tstart = clock();
                 // Do the inverse FFT (tmpdat -> tmpout)
                 fftwf_execute_dft(invplan, (fftwf_complex *) tmpdat,
                                   (fftwf_complex *) tmpout);
+                tend = clock();
+                ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
+                printf("#Thread : %d spent %f seconds on inv dft for jj = %d\n", tid, ttime,jj); */
+
                 // Turn the good parts of the result into powers and store
                 // them in the output matrix
-                fdata = (float *) tmpout;
+                //fdata = (float *) tmpout;
+
+                tstart = clock();
 #if (defined(__GNUC__) || defined(__GNUG__)) &&         \
     !(defined(__clang__) || defined(__INTEL_COMPILER))
 #pragma GCC ivdep
 #endif
                 for (kk = 0; kk < ffdot->numrs; kk++) {
                     const int ind = 2 * (kk + offset);
-                    outpows[kk] = (fdata[ind] * fdata[ind] +
+                    //outpows[kk] = (fdata[ind] * fdata[ind] +
+                    //               fdata[ind + 1] * fdata[ind + 1]) * norm;
+
+                    val += (fdata[ind] * fdata[ind] +
                                    fdata[ind + 1] * fdata[ind + 1]) * norm;
                 }
+                tend = clock();
+                ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
+                printf("val = %f\n",val);
+                printf("#Thread : %d spent %f seconds on power calc for jj = %d\n", tid, ttime,jj);
             }
         }
         vect_free(tmpdat);

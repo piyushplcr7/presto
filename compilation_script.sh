@@ -16,7 +16,7 @@ meson setup build --wipe --prefix=$CONDA_PREFIX
 # fixing libraries for check_meson_build.py
 export LIBRARY_PATH=/home/panchal/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LIBRARY_PATH
 
-export LD_LIBRARY_PATH=/home/panchal/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LD_LIBRARY_PATHQ
+export LD_LIBRARY_PATH=/home/panchal/miniconda3/envs/presto/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 
 # check meson build

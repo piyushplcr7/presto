@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include "assert.h"
 #endif
 
 // Use OpenMP
@@ -1039,7 +1040,7 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
     float powargr, powargi;
     double drlo, drhi, harm_fract;
     fcomplex *data, *pdata;
-    fftwf_plan invplan;
+    //fftwf_plan invplan;
     ffdotpows *ffdot = (ffdotpows *) malloc(sizeof(ffdotpows));
 
     /* Calculate and get the required amplitudes */
@@ -1152,58 +1153,77 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
         fcomplex *tmpout = gen_cvect(fftlen);
         // Compute the inverse FFT plan (these are in/out array specific)
         // FFTW planning is *not* thread-safe
-        invplan = fftwf_plan_dft_1d(fftlen, (fftwf_complex *) tmpdat,
+        /* invplan = fftwf_plan_dft_1d(fftlen, (fftwf_complex *) tmpdat,
                                     (fftwf_complex *) tmpout, +1,
-                                    FFTW_MEASURE | FFTW_DESTROY_INPUT);
+                                    FFTW_MEASURE | FFTW_DESTROY_INPUT); */
         vect_free(tmpdat);
         vect_free(tmpout);
     }
     
-    start = clock();
+    printf("numws: %d, numzs: %d, numrs: %d, fftlen: %d \n", ffdot->numws,ffdot->numzs,ffdot->numrs,fftlen);
+    //start = clock();
+    struct timespec starto,endo;
+    assert(clock_gettime(CLOCK_MONOTONIC, &starto)==0);
     // Perform the correlations in a thread-safe manner
 #ifdef _OPENMP
-#pragma omp parallel default(none) shared(pdata,shi,fftlen,binoffset,ffdot,invplan)
+#pragma omp parallel default(none) shared(pdata,fftlen,ffdot,binoffset) //shared(pdata,shi,fftlen,binoffset,ffdot)
 #endif
     {
         const float norm = 1.0 / (fftlen * fftlen);
         const int offset = binoffset * ACCEL_NUMBETWEEN;
         // tmpdat gets overwritten during the correlation
-        fcomplex *tmpdat = gen_cvect(fftlen);
-        fcomplex *tmpout = gen_cvect(fftlen);
+        //fcomplex *tmpdat = gen_cvect(fftlen);
+        //fcomplex *tmpout = gen_cvect(fftlen);
 
-        clock_t tstart,tend;
-        
+        //clock_t tstart,tend;
+        //printf("tid outside = %d\n", omp_get_thread_num());
+        struct timespec start_thread, end_thread;
+
 #ifdef _OPENMP
 // #pragma omp for collapse(2)  Do we want this somehow?
 #pragma omp for
 #endif
-        /* Check, should we add the collapse to parallelize numws and numzs loops? */
         for (int ii = 0; ii < ffdot->numws; ii++) {
+            clock_gettime(CLOCK_MONOTONIC, &start_thread);
             int tid;
             tid = omp_get_thread_num();
             double val = 0;
-            for (int jj = 0; jj < ffdot->numzs; jj++) {
+            //for (int jj = 0; jj < ffdot->numzs; jj++) {
                 int kk;
                 //float *fkern = (float *) shi->kern[ii][jj].data;
-                float *fpdata = (float *) pdata;
-                float *fdata = (float *) tmpdat;
+                //float *fpdata = (float *) pdata;
+                //float *fdata = (float *) tmpdat;
                 //float *outpows = ffdot->powers[ii][jj];
                 // multiply data and kernel 
                 // (using floats for better vectorization)
-                tstart = clock();
-#if (defined(__GNUC__) || defined(__GNUG__)) &&         \
+                //tstart = clock();
+/* #if (defined(__GNUC__) || defined(__GNUG__)) &&         \
     !(defined(__clang__) || defined(__INTEL_COMPILER))
 #pragma GCC ivdep
-#endif
+#endif */
                 for (kk = 0; kk < fftlen * 2; kk += 2) {
-                    const float dr = fpdata[kk], di = fpdata[kk + 1];
+                    //const float dr = fpdata[kk], di = fpdata[kk + 1];
+                    const float dr = (float) kk / 3000., di = (float) (kk+1)/3000.;
                     const float kr = 0.3/*fkern[kk]*/, ki = 0.1/*fkern[kk + 1]*/;
-                    fdata[kk] = dr * kr + di * ki;
-                    fdata[kk + 1] = di * kr - dr * ki;
+                    /* fdata[kk] = dr * kr + di * ki;
+                    fdata[kk + 1] = di * kr - dr * ki; */
+                    val += dr * kr + di * ki;
+                    val += di * kr - dr * ki;
+                    //printf("i = %d,j = %d,k = %d,tid = %d \n", ii, jj, kk , tid);
+                    
                 }
-                tend = clock();
-                double ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
-                printf("#Thread : %d spent %f seconds on complex mult for jj = %d\n", tid, ttime,jj);
+
+                clock_gettime(CLOCK_MONOTONIC, &end_thread);
+                double time_thread = end_thread.tv_nsec - start_thread.tv_nsec;
+                
+                #pragma omp critical 
+                {
+                    printf("Thread: %d, ii= %d spent %f nanoseconds\n",tid, ii, time_thread);
+                }
+                //printf("tid: %d, val = %f\n",tid,val);
+                //tend = clock();
+                //double ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
+                //printf("#Thread : %d spent %f seconds on complex mult for jj = %d\n", tid, ttime,jj);
 
                 /* tstart = clock();
                 // Do the inverse FFT (tmpdat -> tmpout)
@@ -1217,7 +1237,7 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
                 // them in the output matrix
                 //fdata = (float *) tmpout;
 
-                tstart = clock();
+                /* tstart = clock();
 #if (defined(__GNUC__) || defined(__GNUG__)) &&         \
     !(defined(__clang__) || defined(__INTEL_COMPILER))
 #pragma GCC ivdep
@@ -1233,16 +1253,18 @@ ffdotpows *subharm_fderivs_vol(int numharm, int harmnum,
                 tend = clock();
                 ttime = ((double) (tend - tstart)) / CLOCKS_PER_SEC;
                 printf("val = %f\n",val);
-                printf("#Thread : %d spent %f seconds on power calc for jj = %d\n", tid, ttime,jj);
-            }
+                printf("#Thread : %d spent %f seconds on power calc for jj = %d\n", tid, ttime,jj); */
+            //}
         }
-        vect_free(tmpdat);
-        vect_free(tmpout);
+        //vect_free(tmpdat);
+        //vect_free(tmpout);
     }
+    assert(clock_gettime(CLOCK_MONOTONIC, &endo)==0);
 
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("#KALANINJA:OpenMP correlation %f seconds\n", cpu_time_used);
+    //end = clock();
+    //cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    cpu_time_used = endo.tv_nsec - starto.tv_nsec;
+    printf("#KALANINJA:OpenMP correlation %f nano seconds\n", cpu_time_used);
 
     // Free data and the spread-data
     vect_free(data);

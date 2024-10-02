@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
         lastr = 0;
         nextr = 0;
         int kits = 0;
-        while (startr + rstep < obs.highestbin && kits < 2) {
+        while (startr + rstep < obs.highestbin && kits < 4) {
             ++kits;
             /* Search the fundamental */
             //print_percent_complete(startr - obs.rlo,

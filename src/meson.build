@@ -56,6 +56,9 @@ executable('accelsearch', 'accelsearch.c', 'accelsearch_cmd.c', 'accel_utils.c',
     dependencies: [glib, fftw, libm, omp], c_args: '-DUSEMMAP',
     include_directories: inc, link_with: libpresto, install: true)
 
+executable('accelsearch_test','accelsearch_test.c',
+    dependencies: [omp], install:false)
+
 executable('bary', 'bary.c',
     dependencies: [fftw, libm], include_directories: inc, link_with: libpresto, install: true)
 
